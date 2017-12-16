@@ -5,7 +5,7 @@ galaxy_info:
 
   # If the issue tracker for your role is not on github, uncomment the
   # next line and provide a value
-  # issue_tracker_url: http://example.com/issue/tracker
+  issue_tracker_url: https://github.com/edward-of-clt/Build-and-Automate-Swarm-AWS
 
   # Some suggested licenses:
   # - BSD (default)
@@ -14,7 +14,7 @@ galaxy_info:
   # - GPLv3
   # - Apache
   # - CC-BY
-  license: license (GPLv2, CC-BY, etc)
+  license: MIT
 
   min_ansible_version: 2.4
 
@@ -32,11 +32,18 @@ galaxy_info:
   #
   # platforms is a list of platforms, and each platform has a name and a list of versions.
   #
-  # platforms:
-  # - name: Fedora
-  #   versions:
-  #   - all
-  #   - 25
+  platforms:
+  - name: CentOS
+    versions:
+    - 7
+  - name: Amazon AWS
+    versions:
+    - EC2
+    - ASG
+    - SG
+    - VPC
+    - LB
+
   # - name: SomePlatform
   #   versions:
   #   - all
