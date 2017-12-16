@@ -33,16 +33,10 @@ galaxy_info:
   # platforms is a list of platforms, and each platform has a name and a list of versions.
   #
   platforms:
-  - name: CentOS
+  - name: EL
     versions:
     - 7
-  - name: Amazon AWS
-    versions:
-    - EC2
-    - ASG
-    - SG
-    - VPC
-    - LB
+
 
   # - name: SomePlatform
   #   versions:
