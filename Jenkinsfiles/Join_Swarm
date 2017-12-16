@@ -1,0 +1,26 @@
+#!/usr/bin/env groovy
+node {
+    def workspace = pwd()
+    currentBuild.result = "SUCCESS"
+    echo "Building Job at ${workspace}"
+
+        properties([
+         disableConcurrentBuilds(),
+         parameters([
+           string(name: 'nodeIp', defaultValue: 'undefined'),
+           string(name: 'org', defaultValue: 'undefined'),
+           string(name: 'job', defaultValue: 'undefined')
+         ]),
+         buildDiscarder(logRotator(numToKeepStr: '10'))
+        ])
+
+        stage('Clone') {
+            git poll: true, url: 'https://github.com/edward-of-clt/Build-and-Automate-Swarm-AWS.git', branch: env.BRANCH_NAME
+        }
+
+        stage('Test') {
+          // sh "echo ${nodeIp} ${org} ${job}"
+          sh "ansible-playbook -e @vars/${org}.vars --vault-password-file ~/.ssh/${org}.passwd -e job=${job} -e new_node=${nodeIp} join_node.yml"
+        }
+
+}

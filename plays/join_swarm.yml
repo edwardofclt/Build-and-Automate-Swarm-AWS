@@ -1,0 +1,60 @@
+---
+
+- name: Get join tokens for Docker swarm
+  hosts: manager_nodes[0]
+  become: yes
+  tasks:
+
+    - name: Get Manager Join Token
+      command: docker swarm join-token manager | grep 'docker swarm join'
+      register: manager_join_token
+      ignore_errors: yes
+
+    - name: Get Worker Join Token
+      command: docker swarm join-token worker | grep 'docker swarm join'
+      register: worker_join_token
+      ignore_errors: yes
+
+    - set_fact:
+        worker_join_token: "{{worker_join_token.stdout}}"
+        manager_join_token: "{{manager_join_token.stdout}}"
+      delegate_facts: true
+      delegate_to: localhost
+      when: manager_join_token.stdout != ""
+
+- name: Now that ASG is setup assign nodes to host groups
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - import_tasks: ../tasks/get_instances.yml
+
+- name: Join the other manager nodes as managers
+  hosts: manager_nodes
+  become: yes
+  tasks:
+
+    - shell: docker info | grep Swarm | grep inactive
+      register: joined
+
+    - name: Join the swarm as managers
+      shell: {{hostvars['localhost']['manager_join_token']}}
+      when: joined.stdout != ""
+
+- name: Join worker and dtr to swarm
+  hosts:
+    - dtr_nodes
+    - worker_nodes
+  become: yes
+  tasks:
+
+    - shell: docker info | grep Swarm | grep inactive
+      register: joined
+
+    - name: Join the swarm as workers
+      shell: {{hostvars['localhost']['worker_join_token']}}
+      register: command_result
+      failed_when: "'Cannot connect' in command_result.stderr"
+      when: joined.stdout != ""
+
+...

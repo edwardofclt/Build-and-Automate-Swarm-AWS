@@ -1,0 +1,47 @@
+- ec2_instance_facts:
+    filters:
+      "tag:job": "{{prefix}}_swarm_manager"
+      "instance-state-name": running
+  register: managers
+
+- add_host:
+    name: "{{item.private_ip_address}}"
+    ansible_user: centos
+    groups: manager_nodes, swarm_nodes
+  with_items:
+    - "{{managers.instances}}"
+
+
+- ec2_instance_facts:
+    filters:
+      "tag:job": "{{prefix}}_swarm_worker"
+      "instance-state-name": running
+  register: workers
+
+- add_host:
+    name: "{{item.private_ip_address}}"
+    ansible_user: centos
+    groups: worker_nodes, swarm_nodes
+  with_items:
+    - "{{workers.instances}}"
+
+- ec2_instance_facts:
+    filters:
+      "tag:job": "{{prefix}}_swarm_dtr"
+      "instance-state-name": running
+  register: dtrs
+
+- add_host:
+    name: "{{item.private_ip_address}}"
+    ansible_user: centos
+    groups: dtr_nodes, swarm_nodes
+  with_items:
+    - "{{dtrs.instances}}"
+
+- set_fact:
+    first_ucp_ip: "{{managers.instances[0].private_ip_address}}"
+    first_ucp_node: "{{managers.instances[0].private_dns_name}}"
+    first_dtr_ip: "{{dtrs.instances[0].private_ip_address}}"
+    first_dtr_node: "{{dtrs.instances[0].private_dns_name}}"
+  delegate_facts: yes
+  delegate_to: localhost

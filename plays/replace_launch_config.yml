@@ -1,0 +1,87 @@
+---
+
+- name: Replace Launch Config
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - name: Get SG ID
+      ec2_group:
+        name: Docker Swarm Full Trust
+        description: All nodes within the docker swarm should have full trust with each other and deny entry by anything outside.
+        region: "{{ region }}"
+        vpc_id: "{{ vpc_id }}"
+      register: group
+
+    - name: Assign Full Trust to Self
+      ec2_group:
+        name: Docker Swarm Full Trust
+        group_id: "{{group.group_id}}"
+        description: All nodes within the docker swarm should have full trust with each other and deny entry by anything outside.
+        rules:
+          - proto: all
+            group_id: "{{group.group_id}}"
+            ports:
+              - 0-65535
+          - proto: tcp
+            group_id: "{{lb_security_group}}"
+            ports:
+              - 0-65535
+          - proto: tcp
+            group_id: "{{group.group_id}}"
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+
+    - name: Get AMI ID
+      ec2_ami_find:
+        region: "{{ region }}"
+        name: "{{prefix}}-docker-node-template"
+      register: ami_found
+
+    - name: Define timestamp
+      shell: "date +'%s'"
+      register: epoch
+
+    - set_fact:
+        timestamp: "{{epoch.stdout}}"
+        asg_exists: true
+      delegate_facts: yes
+      delegate_to: localhost
+
+    - name: create manager launch config (with user_data)
+      ec2_lc:
+        name: "{{prefix}}-swarm-manager-launcher-{{hostvars['localhost']['timestamp']}}"
+        image_id: "{{ami_found.results[0].ami_id}}"
+        key_name: "{{ key }}"
+        region: "{{ region }}"
+        security_groups: "{{hostvars['localhost']['group']['group_id']}}"
+        instance_type: m4.large
+        user_data_path: "../files/{{org_name}}/user_data_manager.sh"
+        assign_public_ip: no
+
+    - name: create worker launch config (with user_data)
+      ec2_lc:
+        name: "{{prefix}}-swarm-worker-launcher-{{hostvars['localhost']['timestamp']}}"
+        image_id: "{{ami_found.results[0].ami_id}}"
+        key_name: "{{ key }}"
+        region: "{{ region }}"
+        security_groups: "{{hostvars['localhost']['group']['group_id']}}"
+        user_data_path: "../files/{{org_name}}/user_data_worker.sh"
+        instance_type: m4.large
+        assign_public_ip: no
+
+    - name: create dtr launch config (with user_data)
+      ec2_lc:
+        name: "{{prefix}}-swarm-dtr-launcher-{{hostvars['localhost']['timestamp']}}"
+        image_id: "{{ami_found.results[0].ami_id}}"
+        key_name: "{{ key }}"
+        region: "{{ region }}"
+        security_groups: "{{hostvars['localhost']['group']['group_id']}}"
+        user_data_path: "../files/{{org_name}}/user_data_dtr.sh"
+        instance_type: m3.medium
+        assign_public_ip: no
+
+
+
+...

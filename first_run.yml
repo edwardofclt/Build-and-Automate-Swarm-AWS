@@ -1,0 +1,8 @@
+---
+
+- import_playbook: plays/create_launch_configs.yml
+- import_playbook: plays/add_asg.yml
+- import_playbook: plays/new_swarm.yml
+- import_playbook: plays/replace_launch_configs.yml
+
+...

@@ -1,0 +1,17 @@
+---
+
+- name: assign nodes to host groups
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - import_tasks: ../tasks/get_instances.yml
+
+- name: Get join tokens from a manager
+  hosts: swarm_nodes
+  become: yes
+  tasks:
+
+    - shell: docker system prune -y
+
+...

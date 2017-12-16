@@ -1,0 +1,55 @@
+---
+
+- name: Update ASG with new launch config
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-manager-asg"
+        launch_config_name: "{{prefix}}-swarm-manager-launcher-{{hostvars['localhost']['timestamp']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        wait_for_instances: yes
+        region: "{{ region }}"
+        load_balancers: [ "{{prefix}}-docker-swarm-lb", "{{prefix}}-docker-ucp" ]
+        tags:
+          - job: "{{prefix}}_swarm_manager"
+          - Name: "{{prefix}}-swarm-manager"
+          - Billing: "{{prefix}}_IT"
+      when: hostvars['localhost']['asg_exists'] == true
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-worker-asg"
+        launch_config_name: "{{prefix}}-swarm-worker-launcher-{{hostvars['localhost']['timestamp']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        wait_for_instances: yes
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        region: "{{ region }}"
+        tags:
+          - job: "{{prefix}}_swarm_worker"
+          - Name: "{{prefix}}-swarm-worker"
+          - Billing: "{{prefix}}_IT"
+      when: hostvars['localhost']['asg_exists'] == true
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-dtr-asg"
+        launch_config_name: "{{prefix}}-swarm-dtr-launcher-{{hostvars['localhost']['timestamp']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        load_balancers: [ "{{prefix}}-docker-dtr" ]
+        wait_for_instances: yes
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        region: "{{ region }}"
+        tags:
+          - job: "{{prefix}}_swarm_dtr"
+          - Name: "{{prefix}}-swarm-dtr"
+          - Billing: "{{prefix}}_IT"
+      when: hostvars['localhost']['asg_exists'] == true
+
+...

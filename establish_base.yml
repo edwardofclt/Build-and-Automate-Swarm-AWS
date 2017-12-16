@@ -1,0 +1,5 @@
+---
+
+- import_playbook: plays/create_launch_configs.yml
+
+...

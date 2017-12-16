@@ -1,0 +1,5 @@
+---
+
+- import_playbooks: plays/system_prune.yml
+
+...

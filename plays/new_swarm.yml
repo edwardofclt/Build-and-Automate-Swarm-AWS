@@ -1,0 +1,154 @@
+- name: Now that ASG is setup assign nodes to host groups
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - import_tasks: ../tasks/get_instances.yml
+
+- name: Init Swarm & Install UCP On Primary Manager
+  hosts: manager_nodes[0]
+  become: yes
+  tasks:
+
+    - name: Ensure Docker is started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Initialize the docker swarm
+      command: docker swarm init --advertise-addr={{inventory_hostname}}
+      register: command_result
+      failed_when: "'Cannot connect' in command_result.stderr"
+
+    - name: Get Manager Join Token
+      command: docker swarm join-token manager --quiet
+      register: manager_join_token
+
+    - name: Get Worker Join Token
+      command: docker swarm join-token worker  --quiet
+      register: worker_join_token
+
+    - set_fact:
+        worker_join_token: "{{worker_join_token.stdout}}"
+        manager_join_token: "{{manager_join_token.stdout}}"
+        primary_manager_ip: "{{inventory_hostname}}"
+      delegate_facts: true
+      delegate_to: localhost
+
+    - shell: docker ps | grep ucp
+      register: is_ucp_installed
+      failed_when: "'Cannot connect' in is_ucp_installed.stderr"
+
+    - include_vars: ../secrets/ucp_creds.yml
+      when: is_ucp_installed.stdout == ""
+
+    - name: Create external cert volume
+      shell: docker volume create --name ucp-controller-server-certs
+      when: is_ucp_installed.stdout == ""
+
+    - name: Copy certs to the docker volume
+      copy:
+        src: "../secrets/certs/{{org_name}}/"
+        dest: /var/lib/docker/volumes/ucp-controller-server-certs/_data/
+      when: is_ucp_installed.stdout == ""
+
+    - name: Run Docker UCP
+      shell: |
+        docker run --rm --name ucp \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --security-opt label=disable \
+        docker/ucp:2.2.4 install \
+        --host-address {{inventory_hostname}} \
+        --admin-username {{ucp_admin_user}} \
+        --admin-password {{ucp_admin_pass}} \
+        --external-server-cert
+      when: is_ucp_installed.stdout == ""
+
+    - pause:
+        seconds: 30
+      when: is_ucp_installed.stdout == ""
+
+- name: Join the other manager nodes as managers
+  hosts: manager_nodes[1:]
+  become: yes
+  tasks:
+
+    - name: Join the swarm as managers
+      shell: docker swarm join --token {{hostvars['localhost']['manager_join_token']}} {{hostvars['localhost']['primary_manager_ip']}}:2377
+      register: command_result
+      failed_when: "'Cannot connect' in command_result.stderr"
+
+- name: Join worker and dtr to swarm
+  hosts:
+    - dtr_nodes
+    - worker_nodes
+  become: yes
+  tasks:
+
+    - name: Join the swarm as workers
+      shell: docker swarm join --token {{hostvars['localhost']['worker_join_token']}} {{hostvars['localhost']['primary_manager_ip']}}:2377
+      register: command_result
+      failed_when: "'Cannot connect' in command_result.stderr"
+
+- name: Install DTR on first dtr node
+  hosts: dtr_nodes[0]
+  become: yes
+  tasks:
+
+    - shell: docker ps | grep 'dtr-nginx' | awk -F 'dtr-nginx-' '{print $2}'
+      register: replica_id
+
+    - set_fact:
+        replica_id: "{{replica_id.stdout}}"
+      delegate_facts: yes
+      delegate_to: localhost
+      when:
+        - replica_id.stdout != ""
+
+    - copy:
+        src: "../secrets/certs/{{org_name}}/"
+        dest: /tmp/certs/
+      when: replica_id.stdout == ""
+
+    - include_vars: ../secrets/ucp_creds.yml
+      when: replica_id.stdout == ""
+
+    - shell: docker run -i --rm docker/dtr install --ucp-password '{{ucp_admin_pass}}' --dtr-external-url https://dtr.{{base_url}} --ucp-node $(hostname) --ucp-ca "$(cat /tmp/certs/ca.pem)" --dtr-ca "$(cat /tmp/certs/ca.pem)" --dtr-cert "$(cat /tmp/certs/cert.pem)" --dtr-key "$(cat /tmp/certs/key.pem)" --ucp-username {{ucp_admin_user}} --ucp-url https://ucp.{{base_url}}
+      when: replica_id.stdout == ""
+
+    - shell: docker ps | grep 'dtr-nginx' | awk '{print $12}' | awk -F 'dtr-nginx-' '{print $2}'
+      register: installed_replica_id
+      when: replica_id.stdout == ""
+
+    - set_fact:
+        replica_id: "{{installed_replica_id.stdout}}"
+      delegate_facts: yes
+      delegate_to: localhost
+      when:
+        - installed_replica_id != ""
+        - installed_replica_id.stdout is defined
+
+    - pause: seconds=60
+      when: replica_id.stdout == ""
+
+- name: Install DTR on other dtr node
+  hosts: dtr_nodes[1:]
+  serial: 1
+  become: yes
+  tasks:
+
+  - shell: docker ps | grep 'dtr-'
+    register: dtr_install
+    ignore_errors: yes
+
+  - copy:
+      src: "../secrets/certs/{{org_name}}/"
+      dest: /tmp/certs/
+    when: dtr_install.stdout == ""
+
+  - include_vars: ../secrets/ucp_creds.yml
+    when: dtr_install.stdout == ""
+
+  - shell: docker run -i --rm docker/dtr join --ucp-ca "$(cat /tmp/certs/ca.pem)" --existing-replica-id {{hostvars['localhost']['replica_id']}} --ucp-username {{ucp_admin_user}} --ucp-password '{{ucp_admin_pass}}' --ucp-url https://ucp.{{base_url}} --ucp-node $(hostname)
+    when: dtr_install.stdout == ""

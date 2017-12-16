@@ -1,0 +1,89 @@
+---
+
+- name: Double the size of the ASG if they exist
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - ec2_lc_find:
+        name_regex: "{{prefix}}-swarm-manager-launcher-*"
+        sort_order: descending
+        region: us-east-1
+        limit: 1
+      register: manager_launch_config
+
+    - ec2_lc_find:
+        name_regex: "{{prefix}}-swarm-worker-launcher-*"
+        sort_order: descending
+        region: us-east-1
+        limit: 1
+      register: worker_launch_config
+
+    - ec2_lc_find:
+        name_regex: "{{prefix}}-swarm-dtr-launcher-*"
+        sort_order: descending
+        region: us-east-1
+        limit: 1
+      register: dtr_launch_config
+
+    - set_fact:
+        manager_launch_config: "{{manager_launch_config.results[0].name}}"
+        worker_launch_config: "{{worker_launch_config.results[0].name}}"
+        dtr_launch_config: "{{dtr_launch_config.results[0].name}}"
+      delegate_facts: true
+      delegate_to: localhost
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-manager-asg"
+        launch_config_name: "{{hostvars['localhost']['manager_launch_config']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        min_size: "{{ asg_min_size }}"
+        max_size: "{{ asg_max_size }}"
+        desired_capacity: "{{ asg_desired_size * 2 + 1 }}"
+        wait_for_instances: yes
+        region: "{{ region }}"
+        load_balancers: [ "{{prefix}}-docker-swarm-lb", "{{prefix}}-docker-ucp" ]
+        tags:
+          - job: "{{prefix}}_swarm_manager"
+          - Name: "{{prefix}}-swarm-manager"
+          - Billing: "{{prefix}}_IT"
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-worker-asg"
+        launch_config_name: "{{hostvars['localhost']['worker_launch_config']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        min_size: "{{ asg_min_size }}"
+        max_size: "{{ asg_max_size }}"
+        desired_capacity: "{{ asg_desired_size * 2 + 1 }}"
+        wait_for_instances: yes
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        region: "{{ region }}"
+        tags:
+          - job: "{{prefix}}_swarm_worker"
+          - Name: "{{prefix}}-swarm-worker"
+          - Billing: "{{prefix}}_IT"
+
+    - ec2_asg:
+        name: "{{prefix}}-swarm-dtr-asg"
+        launch_config_name: "{{hostvars['localhost']['dtr_launch_config']}}"
+        health_check_period: 60
+        health_check_type: EC2
+        load_balancers: [ "{{prefix}}-docker-dtr" ]
+        min_size: "{{ asg_min_size }}"
+        max_size: "{{ asg_max_size }}"
+        desired_capacity: "{{ asg_desired_size * 2 + 1 }}"
+        wait_for_instances: yes
+        availability_zones: "{{ availablity_zones }}"
+        vpc_zone_identifier: "{{ vpc_zone_ids }}"
+        region: "{{ region }}"
+        tags:
+          - job: "{{prefix}}_swarm_dtr"
+          - Name: "{{prefix}}-swarm-dtr"
+          - Billing: "{{prefix}}_IT"
+
+...

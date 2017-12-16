@@ -1,0 +1,51 @@
+---
+
+- name: assign nodes to host groups
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+    - import_tasks: ../tasks/get_instances.yml
+
+- name: Get join tokens from a manager
+  hosts: manager_nodes
+  become: yes
+  serial:
+    - 1
+  tasks:
+
+  - name: Get Manager Join Token
+    shell: docker swarm join-token manager | grep 'docker swarm join'
+    register: manager_join_token
+    ignore_errors: yes
+    when: hostvars['localhost']['manager_join_token'] is not defined
+
+  - name: Get Worker Join Token
+    shell: docker swarm join-token worker | grep 'docker swarm join'
+    register: worker_join_token
+    ignore_errors: yes
+    when: hostvars['localhost']['manager_join_token'] is not defined
+
+  - set_fact:
+      worker_join_token: "{{worker_join_token.stdout}}"
+      manager_join_token: "{{manager_join_token.stdout}}"
+    delegate_facts: true
+    delegate_to: localhost
+    when: hostvars['localhost']['manager_join_token'] is not defined and worker_join_token.stdout != "" and manager_join_token.stdout != ""
+
+- name: Get join tokens from a manager
+  hosts: dtr_nodes
+  become: yes
+  tasks:
+
+    - shell: docker ps | grep 'dtr-nginx' | awk -F 'dtr-nginx-' '{print $2}'
+      register: installed_replica_id
+      when: hostvars['localhost']['dtr_replica_id'] is not defined
+
+    - set_fact:
+        dtr_replica_id: "{{installed_replica_id.stdout}}"
+      delegate_facts: true
+      delegate_to: localhost
+      when: hostvars['localhost']['dtr_replica_id'] is not defined and installed_replica_id.stdout != ""
+
+...

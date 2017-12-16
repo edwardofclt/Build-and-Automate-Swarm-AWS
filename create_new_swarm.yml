@@ -1,0 +1,6 @@
+---
+
+- import_playbook: plays/add_asg.yml
+- import_playbook: plays/new_swarm.yml
+
+...

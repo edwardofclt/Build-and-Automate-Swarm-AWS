@@ -1,0 +1,31 @@
+---
+
+- name: Join new node to swarm
+  hosts: "{{new_node}}"
+  become: yes
+  tasks:
+
+    - name: Join node as manager
+      shell: "{{hostvars['localhost']['manager_join_token']}}"
+      when: job == "manager"
+      ignore_errors: yes
+
+    - name: Join node as worker
+      shell: "{{hostvars['localhost']['worker_join_token']}}"
+      when: job != "manager"
+      ignore_errors: yes
+
+    - copy:
+        src: "../secrets/certs/{{org_name}}/"
+        dest: /tmp/certs/
+      when:
+        - job == "dtr"
+
+    - include_vars: ../secrets/ucp_creds.yml
+      when: job == "dtr"
+
+    - name: If DTR node, run dtr join
+      shell: docker run -i --rm docker/dtr join --ucp-ca "$(cat /tmp/certs/ca.pem)" --existing-replica-id {{hostvars['localhost']['dtr_replica_id']}} --ucp-username {{ucp_admin_user}} --ucp-password '{{ucp_admin_pass}}' --ucp-url https://ucp.{{base_url}} --ucp-node $(hostname)
+      when: job == "dtr"
+
+...

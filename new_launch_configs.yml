@@ -1,0 +1,6 @@
+---
+
+- import_playbook: plays/replace_launch_config.yml
+- import_playbook: plays/update_asg_lc.yml
+
+...

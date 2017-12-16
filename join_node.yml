@@ -1,0 +1,6 @@
+---
+
+- import_playbook: plays/get_join_tokens.yml
+- import_playbook: plays/join_new_node.yml
+
+...
