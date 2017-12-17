@@ -1,5 +1,0 @@
----
-
-- import_playbook: plays/build-swarm-aws.yml
-
-...
